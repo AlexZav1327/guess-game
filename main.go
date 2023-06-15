@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	var botToken = "5148810257:AAHyX2zm6Y154ioGsOPOp171sOWH7ZA924"
+	const botToken = "5148810257:AAHyX2zm6Y154ioGsOPOp171sOWH7ZA924"
 
 	bot, err := tgbotapi.NewBotAPI(botToken)
 
