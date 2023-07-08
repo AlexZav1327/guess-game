@@ -1,10 +1,12 @@
 package main
 
 import (
-	"log"
+	"context"
+	"fmt"
 	"math/rand"
+	"os/signal"
 	"strconv"
-	"time"
+	"syscall"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -13,9 +15,9 @@ func main() {
 	const botToken = "5148810257:AAHyX2zm6Y154ioGsOPOp171sOWH7ZA924"
 
 	bot, err := tgbotapi.NewBotAPI(botToken)
-
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println("BotAPI instance creation error:", err)
+		return
 	}
 
 	bot.Debug = true
@@ -24,20 +26,28 @@ func main() {
 	updateConfig.Timeout = 60
 	updates := bot.GetUpdatesChan(updateConfig)
 
-	run(bot, updates)
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
+	defer cancel()
+
+	run(ctx, bot, updates)
 }
 
-func run(bot *tgbotapi.BotAPI, updates tgbotapi.UpdatesChannel) {
+func run(ctx context.Context, bot *tgbotapi.BotAPI, updates tgbotapi.UpdatesChannel) {
 	var target int
-	var guess int = 10
+	guess := 10
 
-	for update := range updates {
-
-		switch {
-		case update.Message != nil:
-			processMessage(&target, &guess, bot, update)
-		case update.CallbackQuery != nil:
-			processCallbackQuery(&target, bot, update)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case update := <-updates:
+			switch {
+			case update.Message != nil:
+				processMessage(&target, &guess, bot, update)
+			case update.CallbackQuery != nil:
+				processCallbackQuery(&target, bot, update)
+			}
 		}
 	}
 }
@@ -59,16 +69,12 @@ func processMessage(target *int, guess *int, bot *tgbotapi.BotAPI, update tgbota
 		response = tgbotapi.NewMessage(update.Message.Chat.ID, "Твое число слишком МАЛЕНЬКОЕ. Число оставшихся попыток: "+strconv.Itoa(*guess))
 	case convertUserMessageToInt(userMessage) == *target:
 		response = tgbotapi.NewMessage(update.Message.Chat.ID, "О, да! У тебя ПОЛУЧИЛОСЬ отгадать число!\nЧтобы сыграть еще жми /start")
-		seconds := time.Now().Unix()
-		rand.Seed(seconds)
 		*target = rand.Intn(100) + 1
 		*guess = 10
 	}
 
 	if *guess == 0 {
 		response = tgbotapi.NewMessage(update.Message.Chat.ID, "Извини, у тебя не получилось отгадать число. Ответ был "+strconv.Itoa(*target)+"."+"\nЧтобы сыграть еще жми /start")
-		seconds := time.Now().Unix()
-		rand.Seed(seconds)
 		*target = rand.Intn(100) + 1
 		*guess = 10
 	}
@@ -83,8 +89,6 @@ func processCallbackQuery(target *int, bot *tgbotapi.BotAPI, update tgbotapi.Upd
 
 	switch {
 	case callbackData == "yes":
-		seconds := time.Now().Unix()
-		rand.Seed(seconds)
 		*target = rand.Intn(100) + 1
 		response = tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "Тогда погнали! Отправь мне число")
 	case callbackData == "no":
@@ -110,7 +114,8 @@ func createStartKeyboard(chatId int64) tgbotapi.Chattable {
 func convertUserMessageToInt(message string) int {
 	result, err := strconv.Atoi(message)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println("Error converting user response to integer:", err)
+		return 0
 	}
 
 	return result
