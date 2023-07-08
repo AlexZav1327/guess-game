@@ -16,7 +16,7 @@ type guessBot struct {
 	bot     *tgbotapi.BotAPI
 }
 
-func (b guessBot) run(ctx context.Context) {
+func (g guessBot) run(ctx context.Context) {
 	var target int
 	guess := 10
 
@@ -24,18 +24,18 @@ func (b guessBot) run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case update := <-b.updates:
+		case update := <-g.updates:
 			switch {
 			case update.Message != nil:
-				b.processMessage(&target, &guess, update)
+				g.processMessage(&target, &guess, update)
 			case update.CallbackQuery != nil:
-				b.processCallbackQuery(&target, update)
+				g.processCallbackQuery(&target, update)
 			}
 		}
 	}
 }
 
-func (b guessBot) processMessage(target *int, guess *int, update tgbotapi.Update) {
+func (g guessBot) processMessage(target *int, guess *int, update tgbotapi.Update) {
 	userMessage := update.Message.Text
 	var response tgbotapi.Chattable = tgbotapi.NewMessage(update.Message.Chat.ID, "")
 	var responseKeyboard tgbotapi.Chattable = tgbotapi.NewMessage(update.Message.Chat.ID, "")
@@ -62,11 +62,11 @@ func (b guessBot) processMessage(target *int, guess *int, update tgbotapi.Update
 		*guess = 10
 	}
 
-	gb.bot.Send(response)
-	gb.bot.Send(responseKeyboard)
+	g.bot.Send(response)
+	g.bot.Send(responseKeyboard)
 }
 
-func (b guessBot) processCallbackQuery(target *int, update tgbotapi.Update) {
+func (g guessBot) processCallbackQuery(target *int, update tgbotapi.Update) {
 	callbackData := update.CallbackQuery.Data
 	var response tgbotapi.Chattable = tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "")
 
@@ -78,13 +78,11 @@ func (b guessBot) processCallbackQuery(target *int, update tgbotapi.Update) {
 		response = tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "Если передумаешь, жми /start")
 	}
 
-	gb.bot.Send(response)
+	g.bot.Send(response)
 }
 
-var gb guessBot
-
 func main() {
-	const botToken = "5148810257:AAHyX2zm6Y154ioGsOPOp171sOWH7ZA924"
+	const botToken = "5148810257:AAHyX2zm6Y154ioGsOPOp171sOW7H7ZA924"
 
 	bot, err := tgbotapi.NewBotAPI(botToken)
 	if err != nil {
@@ -102,7 +100,7 @@ func main() {
 
 	defer cancel()
 
-	gb = guessBot{updates, bot}
+	gb := guessBot{updates, bot}
 	gb.run(ctx)
 }
 
