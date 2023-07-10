@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"os"
 	"os/signal"
 	"strconv"
 	"syscall"
@@ -82,7 +83,7 @@ func (g guessBot) processCallbackQuery(target *int, update tgbotapi.Update) {
 }
 
 func main() {
-	const botToken = "5148810257:AAHyX2zm6Y154ioGsOPOp171sOW7H7ZA924"
+	var botToken = os.Getenv("BOT_TOKEN")
 
 	bot, err := tgbotapi.NewBotAPI(botToken)
 	if err != nil {
