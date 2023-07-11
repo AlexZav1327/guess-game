@@ -1,23 +1,20 @@
-package main
+package tgbot
 
 import (
 	"context"
 	"fmt"
 	"math/rand"
-	"os"
-	"os/signal"
 	"strconv"
-	"syscall"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-type guessBot struct {
-	updates tgbotapi.UpdatesChannel
-	bot     *tgbotapi.BotAPI
+type GuessBot struct {
+	Updates tgbotapi.UpdatesChannel
+	Bot     tgbotapi.BotAPI
 }
 
-func (g guessBot) run(ctx context.Context) {
+func (g *GuessBot) Run(ctx context.Context) {
 	var target int
 	guess := 10
 
@@ -25,7 +22,7 @@ func (g guessBot) run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case update := <-g.updates:
+		case update := <-g.Updates:
 			switch {
 			case update.Message != nil:
 				g.processMessage(&target, &guess, update)
@@ -36,7 +33,7 @@ func (g guessBot) run(ctx context.Context) {
 	}
 }
 
-func (g guessBot) processMessage(target *int, guess *int, update tgbotapi.Update) {
+func (g *GuessBot) processMessage(target *int, guess *int, update tgbotapi.Update) {
 	userMessage := update.Message.Text
 	var response tgbotapi.Chattable = tgbotapi.NewMessage(update.Message.Chat.ID, "")
 	var responseKeyboard tgbotapi.Chattable = tgbotapi.NewMessage(update.Message.Chat.ID, "")
@@ -63,11 +60,19 @@ func (g guessBot) processMessage(target *int, guess *int, update tgbotapi.Update
 		*guess = 10
 	}
 
-	g.bot.Send(response)
-	g.bot.Send(responseKeyboard)
+	_, err := g.Bot.Send(response)
+	if err != nil {
+		fmt.Println("Response sending error:", err)
+		return
+	}
+	_, err = g.Bot.Send(responseKeyboard)
+	if err != nil {
+		fmt.Println("Response keyboard sending error:", err)
+		return
+	}
 }
 
-func (g guessBot) processCallbackQuery(target *int, update tgbotapi.Update) {
+func (g *GuessBot) processCallbackQuery(target *int, update tgbotapi.Update) {
 	callbackData := update.CallbackQuery.Data
 	var response tgbotapi.Chattable = tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "")
 
@@ -79,30 +84,11 @@ func (g guessBot) processCallbackQuery(target *int, update tgbotapi.Update) {
 		response = tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "Если передумаешь, жми /start")
 	}
 
-	g.bot.Send(response)
-}
-
-func main() {
-	var botToken = os.Getenv("BOT_TOKEN")
-
-	bot, err := tgbotapi.NewBotAPI(botToken)
+	_, err := g.Bot.Send(response)
 	if err != nil {
-		fmt.Println("BotAPI instance creation error:", err)
+		fmt.Println("Response sending error:", err)
 		return
 	}
-
-	bot.Debug = true
-
-	updateConfig := tgbotapi.NewUpdate(0)
-	updateConfig.Timeout = 60
-	updates := bot.GetUpdatesChan(updateConfig)
-
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-
-	defer cancel()
-
-	gb := guessBot{updates, bot}
-	gb.run(ctx)
 }
 
 func createStartKeyboard(chatId int64) tgbotapi.Chattable {
