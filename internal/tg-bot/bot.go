@@ -35,17 +35,19 @@ func (g *GuessBot) Run(ctx context.Context) {
 }
 
 func (g *GuessBot) processMessage(target *int, guess *int, update tgbotapi.Update) {
-	userMessage := update.Message.Text
-	userMessageAsInt := convertUserMessageToInt(userMessage)
-
 	var response tgbotapi.Chattable = tgbotapi.NewMessage(update.Message.Chat.ID, "")
 
 	var responseKeyboard tgbotapi.Chattable = tgbotapi.NewMessage(update.Message.Chat.ID, "")
+
+	userMessage := update.Message.Text
+	userMessageAsInt, userMessageNotInt := convertUserMessageToInt(userMessage)
 
 	switch {
 	case userMessage == "/start":
 		response = tgbotapi.NewMessage(update.Message.Chat.ID, "Я загадал число в диапазоне от 1 до 1000")
 		responseKeyboard = createStartKeyboard(update.Message.Chat.ID)
+	case userMessageNotInt:
+		response = tgbotapi.NewMessage(update.Message.Chat.ID, "Введено не число. Повтори попытку")
 	case userMessageAsInt > *target:
 		*guess--
 		response = tgbotapi.NewMessage(update.Message.Chat.ID, "Твое число слишком БОЛЬШОЕ. Число оставшихся попыток: "+strconv.Itoa(*guess))
@@ -128,15 +130,13 @@ func createStartKeyboard(chatID int64) tgbotapi.Chattable {
 	return msg
 }
 
-func convertUserMessageToInt(message string) int {
+func convertUserMessageToInt(message string) (int, bool) {
+	notNumber := false
+
 	result, err := strconv.Atoi(message)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"package":  "tgbot",
-			"function": "convertUserMessageToInt",
-			"error":    err,
-		}).Error("Error converting user response to integer")
+		notNumber = true
 	}
 
-	return result
+	return result, notNumber
 }
