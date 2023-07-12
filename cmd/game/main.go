@@ -2,21 +2,26 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 
 	tgbot "github.com/AlexZav1327/guess-game/internal/tg-bot"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	log "github.com/sirupsen/logrus"
 )
 
 func main() {
-	var botToken = os.Getenv("BOT_TOKEN")
+	botToken := os.Getenv("BOT_TOKEN")
 
 	bot, err := tgbotapi.NewBotAPI(botToken)
 	if err != nil {
-		fmt.Println("BotAPI instance creation error:", err)
+		log.WithFields(log.Fields{
+			"package":  "main",
+			"function": "NewBotAPI",
+			"error":    err,
+		}).Fatal("BotAPI instance creation error")
+
 		return
 	}
 

@@ -2,11 +2,11 @@ package tgbot
 
 import (
 	"context"
-	"fmt"
 	"math/rand"
 	"strconv"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	log "github.com/sirupsen/logrus"
 )
 
 type GuessBot struct {
@@ -16,6 +16,7 @@ type GuessBot struct {
 
 func (g *GuessBot) Run(ctx context.Context) {
 	var target int
+
 	guess := 10
 
 	for {
@@ -35,20 +36,23 @@ func (g *GuessBot) Run(ctx context.Context) {
 
 func (g *GuessBot) processMessage(target *int, guess *int, update tgbotapi.Update) {
 	userMessage := update.Message.Text
+	userMessageAsInt := convertUserMessageToInt(userMessage)
+
 	var response tgbotapi.Chattable = tgbotapi.NewMessage(update.Message.Chat.ID, "")
+
 	var responseKeyboard tgbotapi.Chattable = tgbotapi.NewMessage(update.Message.Chat.ID, "")
 
 	switch {
 	case userMessage == "/start":
 		response = tgbotapi.NewMessage(update.Message.Chat.ID, "Я загадал число в диапазоне от 1 до 1000")
 		responseKeyboard = createStartKeyboard(update.Message.Chat.ID)
-	case convertUserMessageToInt(userMessage) > *target:
-		*guess = *guess - 1
+	case userMessageAsInt > *target:
+		*guess--
 		response = tgbotapi.NewMessage(update.Message.Chat.ID, "Твое число слишком БОЛЬШОЕ. Число оставшихся попыток: "+strconv.Itoa(*guess))
-	case convertUserMessageToInt(userMessage) < *target:
-		*guess = *guess - 1
+	case userMessageAsInt < *target:
+		*guess--
 		response = tgbotapi.NewMessage(update.Message.Chat.ID, "Твое число слишком МАЛЕНЬКОЕ. Число оставшихся попыток: "+strconv.Itoa(*guess))
-	case convertUserMessageToInt(userMessage) == *target:
+	case userMessageAsInt == *target:
 		response = tgbotapi.NewMessage(update.Message.Chat.ID, "О, да! У тебя ПОЛУЧИЛОСЬ отгадать число!\nЧтобы сыграть еще жми /start")
 		*target = rand.Intn(1000) + 1
 		*guess = 10
@@ -62,18 +66,32 @@ func (g *GuessBot) processMessage(target *int, guess *int, update tgbotapi.Updat
 
 	_, err := g.Bot.Send(response)
 	if err != nil {
-		fmt.Println("Response sending error:", err)
+		log.WithFields(log.Fields{
+			"package":  "tgbot",
+			"function": "processMessage",
+			"method":   "Send",
+			"error":    err,
+		}).Warning("Response sending error")
+
 		return
 	}
+
 	_, err = g.Bot.Send(responseKeyboard)
 	if err != nil {
-		fmt.Println("Response keyboard sending error:", err)
+		log.WithFields(log.Fields{
+			"package":  "tgbot",
+			"function": "processMessage",
+			"method":   "Send",
+			"error":    err,
+		}).Warning("Response keyboard sending error")
+
 		return
 	}
 }
 
 func (g *GuessBot) processCallbackQuery(target *int, update tgbotapi.Update) {
 	callbackData := update.CallbackQuery.Data
+
 	var response tgbotapi.Chattable = tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "")
 
 	switch {
@@ -86,19 +104,25 @@ func (g *GuessBot) processCallbackQuery(target *int, update tgbotapi.Update) {
 
 	_, err := g.Bot.Send(response)
 	if err != nil {
-		fmt.Println("Response sending error:", err)
+		log.WithFields(log.Fields{
+			"package":  "tgbot",
+			"function": "processCallbackQuery",
+			"method":   "Send",
+			"error":    err,
+		}).Warning("Response sending error")
+
 		return
 	}
 }
 
-func createStartKeyboard(chatId int64) tgbotapi.Chattable {
+func createStartKeyboard(chatID int64) tgbotapi.Chattable {
 	btnY := tgbotapi.NewInlineKeyboardButtonData("Играем!", "yes")
 	btnN := tgbotapi.NewInlineKeyboardButtonData("В другой раз", "no")
 
 	row := tgbotapi.NewInlineKeyboardRow(btnY, btnN)
 	inlineKeyboard := tgbotapi.NewInlineKeyboardMarkup(row)
 
-	msg := tgbotapi.NewMessage(chatId, "Сможешь угадать это число с 10 попыток?")
+	msg := tgbotapi.NewMessage(chatID, "Сможешь угадать это число с 10 попыток?")
 	msg.ReplyMarkup = inlineKeyboard
 
 	return msg
@@ -107,7 +131,11 @@ func createStartKeyboard(chatId int64) tgbotapi.Chattable {
 func convertUserMessageToInt(message string) int {
 	result, err := strconv.Atoi(message)
 	if err != nil {
-		fmt.Println("Error converting user response to integer:", err)
+		log.WithFields(log.Fields{
+			"package":  "tgbot",
+			"function": "convertUserMessageToInt",
+			"error":    err,
+		}).Error("Error converting user response to integer")
 	}
 
 	return result

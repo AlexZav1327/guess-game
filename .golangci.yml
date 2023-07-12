@@ -19,7 +19,7 @@ linters:
     - wastedassign
     - exhaustive
     - ireturn
-
+    - depguard
 
 run:
   timeout: 10m
