@@ -53,7 +53,7 @@ func (b *Bot) processMessage(target *int, guessQty *int, game gameplay.GameSetti
 	switch {
 	case userMessage == "/start":
 		response = tgbotapi.NewMessage(update.Message.Chat.ID, botGameplayAnswers["guessRange"])
-		responseKeyboard = createStartKeyboard(update.Message.Chat.ID)
+		responseKeyboard = createStartKeyboard(update.Message.Chat.ID, game)
 		showResponseKeyboard = true
 
 	case userMessageNotInt:
@@ -72,6 +72,8 @@ func (b *Bot) processMessage(target *int, guessQty *int, game gameplay.GameSetti
 
 	if *guessQty == 0 {
 		response = tgbotapi.NewMessage(update.Message.Chat.ID, botGameplayAnswers["playerLost"])
+
+		*guessQty = game.GuessQty
 	}
 
 	_, err := b.Bot.Send(response)
@@ -104,13 +106,18 @@ func (b *Bot) processCallbackQuery(target *int, guessQty *int, game gameplay.Gam
 
 	callbackData := update.CallbackQuery.Data
 
+	botGameplayAnswers := map[string]string{
+		"start":     "Тогда погнали! Отправь мне число",
+		"rejection": "Если передумаешь, жми /start",
+	}
+
 	switch {
 	case callbackData == "yes":
 		*target = game.GenerateRandNumb()
 		*guessQty = game.GuessQty
-		response = tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "Тогда погнали! Отправь мне число")
+		response = tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, botGameplayAnswers["start"])
 	case callbackData == "no":
-		response = tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "Если передумаешь, жми /start")
+		response = tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, botGameplayAnswers["rejection"])
 	}
 
 	_, err := b.Bot.Send(response)
@@ -125,14 +132,18 @@ func (b *Bot) processCallbackQuery(target *int, guessQty *int, game gameplay.Gam
 	}
 }
 
-func createStartKeyboard(chatID int64) tgbotapi.Chattable {
+func createStartKeyboard(chatID int64, game gameplay.GameSettings) tgbotapi.Chattable {
+	botGameplayAnswers := map[string]string{
+		"guessQty": fmt.Sprintf("Сможешь угадать это число с %d попыток?", game.GuessQty),
+	}
+
 	btnY := tgbotapi.NewInlineKeyboardButtonData("Играем!", "yes")
 	btnN := tgbotapi.NewInlineKeyboardButtonData("В другой раз", "no")
 
 	row := tgbotapi.NewInlineKeyboardRow(btnY, btnN)
 	inlineKeyboard := tgbotapi.NewInlineKeyboardMarkup(row)
 
-	msg := tgbotapi.NewMessage(chatID, "Сможешь угадать это число с 10 попыток?")
+	msg := tgbotapi.NewMessage(chatID, botGameplayAnswers["guessQty"])
 	msg.ReplyMarkup = inlineKeyboard
 
 	return msg

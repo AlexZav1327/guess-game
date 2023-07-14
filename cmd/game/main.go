@@ -38,9 +38,6 @@ func main() {
 
 	guessBot := tgbot.Bot{Updates: Updates, Bot: *bot}
 	game := gameplay.GameSettings{GuessQty: 10, MinNum: 1, MaxNum: 1000}
-	// a := &game.GuessQty
-	// *a--
-	// fmt.Println(game.GuessQty)
 
 	guessBot.Run(ctx, game)
 }
