@@ -1,9 +1,9 @@
 # Guess game
 
-### This application is telegram bot game.
+### This application is a telegram bot game.
 
-### The goal of game is to guess a random number in the range from 1 to 100.
+### The goal of the game is to guess a random number within a certain range.
 
-### You will have only **10** attempts.
+### The number of attempts is limited.
 
 ### Good luck!

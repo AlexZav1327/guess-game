@@ -7,5 +7,8 @@ fmt:
 tidy:	
 	go mod tidy
 
-lint: 
+lint: build fmt tidy
 	golangci-lint run ./...
+
+run:
+	go run cmd/game/main.go

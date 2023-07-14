@@ -2,114 +2,122 @@ package tgbot
 
 import (
 	"context"
-	"math/rand"
-	"strconv"
+	"fmt"
 
+	gameplay "github.com/AlexZav1327/guess-game/internal/gameplay"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	log "github.com/sirupsen/logrus"
 )
 
-type GuessBot struct {
+type Bot struct {
 	Updates tgbotapi.UpdatesChannel
 	Bot     tgbotapi.BotAPI
 }
 
-func (g *GuessBot) Run(ctx context.Context) {
-	var target int
-
-	guess := 10
+func (b *Bot) Run(ctx context.Context, game gameplay.GameSettings) {
+	guessQty := game.GuessQty
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case update := <-g.Updates:
+		case update := <-b.Updates:
 			switch {
 			case update.Message != nil:
-				g.processMessage(&target, &guess, update)
+				b.processMessage(&game.Target, &guessQty, game, update)
 			case update.CallbackQuery != nil:
-				g.processCallbackQuery(&target, update)
+				b.processCallbackQuery(&game.Target, &guessQty, game, update)
 			}
 		}
 	}
 }
 
-func (g *GuessBot) processMessage(target *int, guess *int, update tgbotapi.Update) {
+func (b *Bot) processMessage(target *int, guessQty *int, game gameplay.GameSettings, update tgbotapi.Update) {
 	var response tgbotapi.Chattable = tgbotapi.NewMessage(update.Message.Chat.ID, "")
 
 	var responseKeyboard tgbotapi.Chattable = tgbotapi.NewMessage(update.Message.Chat.ID, "")
 
 	userMessage := update.Message.Text
-	userMessageAsInt, userMessageNotInt := convertUserMessageToInt(userMessage)
+	userMessageAsInt, userMessageNotInt := game.ConvertUserMessageToInt(userMessage)
+	showResponseKeyboard := false
+
+	botGameplayAnswers := map[string]string{
+		"guessRange":     fmt.Sprintf("Я загадал число в диапазоне от %d до %d", game.MinNum, game.MaxNum),
+		"notInt":         "Введено не число. Повтори попытку",
+		"numberTooBig":   fmt.Sprintf("Твое число слишком БОЛЬШОЕ. Число оставшихся попыток: %d", *guessQty-1),
+		"numberTooSmall": fmt.Sprintf("Твое число слишком МАЛЕНЬКОЕ. Число оставшихся попыток: %d", *guessQty-1),
+		"playerWon":      "О, да! У тебя ПОЛУЧИЛОСЬ отгадать число!\nЧтобы сыграть еще жми /start",
+		"playerLost":     fmt.Sprintf("Извини, у тебя не получилось отгадать число. Ответ был %d.\nЧтобы сыграть еще жми /start", *target), //nolint:lll
+	}
 
 	switch {
 	case userMessage == "/start":
-		response = tgbotapi.NewMessage(update.Message.Chat.ID, "Я загадал число в диапазоне от 1 до 1000")
+		response = tgbotapi.NewMessage(update.Message.Chat.ID, botGameplayAnswers["guessRange"])
 		responseKeyboard = createStartKeyboard(update.Message.Chat.ID)
+		showResponseKeyboard = true
+
 	case userMessageNotInt:
-		response = tgbotapi.NewMessage(update.Message.Chat.ID, "Введено не число. Повтори попытку")
+		response = tgbotapi.NewMessage(update.Message.Chat.ID, botGameplayAnswers["notInt"])
 	case userMessageAsInt > *target:
-		*guess--
-		response = tgbotapi.NewMessage(update.Message.Chat.ID, "Твое число слишком БОЛЬШОЕ. Число оставшихся попыток: "+strconv.Itoa(*guess))
+		*guessQty--
+
+		response = tgbotapi.NewMessage(update.Message.Chat.ID, botGameplayAnswers["numberTooBig"])
 	case userMessageAsInt < *target:
-		*guess--
-		response = tgbotapi.NewMessage(update.Message.Chat.ID, "Твое число слишком МАЛЕНЬКОЕ. Число оставшихся попыток: "+strconv.Itoa(*guess))
+		*guessQty--
+
+		response = tgbotapi.NewMessage(update.Message.Chat.ID, botGameplayAnswers["numberTooSmall"])
 	case userMessageAsInt == *target:
-		response = tgbotapi.NewMessage(update.Message.Chat.ID, "О, да! У тебя ПОЛУЧИЛОСЬ отгадать число!\nЧтобы сыграть еще жми /start")
-		*target = rand.Intn(1000) + 1
-		*guess = 10
+		response = tgbotapi.NewMessage(update.Message.Chat.ID, botGameplayAnswers["playerWon"])
 	}
 
-	if *guess == 0 {
-		response = tgbotapi.NewMessage(update.Message.Chat.ID, "Извини, у тебя не получилось отгадать число. Ответ был "+strconv.Itoa(*target)+"."+"\nЧтобы сыграть еще жми /start")
-		*target = rand.Intn(1000) + 1
-		*guess = 10
+	if *guessQty == 0 {
+		response = tgbotapi.NewMessage(update.Message.Chat.ID, botGameplayAnswers["playerLost"])
 	}
 
-	_, err := g.Bot.Send(response)
+	_, err := b.Bot.Send(response)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"package":  "tgbot",
 			"function": "processMessage",
-			"method":   "Send",
 			"error":    err,
 		}).Warning("Response sending error")
 
 		return
 	}
 
-	_, err = g.Bot.Send(responseKeyboard)
-	if err != nil {
-		log.WithFields(log.Fields{
-			"package":  "tgbot",
-			"function": "processMessage",
-			"method":   "Send",
-			"error":    err,
-		}).Warning("Response keyboard sending error")
+	if showResponseKeyboard {
+		_, err := b.Bot.Send(responseKeyboard)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"package":  "tgbot",
+				"function": "processMessage",
+				"error":    err,
+			}).Warning("Response keyboard sending error")
 
-		return
+			return
+		}
 	}
 }
 
-func (g *GuessBot) processCallbackQuery(target *int, update tgbotapi.Update) {
-	callbackData := update.CallbackQuery.Data
-
+func (b *Bot) processCallbackQuery(target *int, guessQty *int, game gameplay.GameSettings, update tgbotapi.Update) {
 	var response tgbotapi.Chattable = tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "")
+
+	callbackData := update.CallbackQuery.Data
 
 	switch {
 	case callbackData == "yes":
-		*target = rand.Intn(1000) + 1
+		*target = game.GenerateRandNumb()
+		*guessQty = game.GuessQty
 		response = tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "Тогда погнали! Отправь мне число")
 	case callbackData == "no":
 		response = tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "Если передумаешь, жми /start")
 	}
 
-	_, err := g.Bot.Send(response)
+	_, err := b.Bot.Send(response)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"package":  "tgbot",
 			"function": "processCallbackQuery",
-			"method":   "Send",
 			"error":    err,
 		}).Warning("Response sending error")
 
@@ -128,15 +136,4 @@ func createStartKeyboard(chatID int64) tgbotapi.Chattable {
 	msg.ReplyMarkup = inlineKeyboard
 
 	return msg
-}
-
-func convertUserMessageToInt(message string) (int, bool) {
-	notNumber := false
-
-	result, err := strconv.Atoi(message)
-	if err != nil {
-		notNumber = true
-	}
-
-	return result, notNumber
 }

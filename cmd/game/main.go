@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	gameplay "github.com/AlexZav1327/guess-game/internal/gameplay"
 	tgbot "github.com/AlexZav1327/guess-game/internal/tg-bot"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	log "github.com/sirupsen/logrus"
@@ -35,6 +36,11 @@ func main() {
 
 	defer cancel()
 
-	gb := tgbot.GuessBot{Updates: Updates, Bot: *bot}
-	gb.Run(ctx)
+	guessBot := tgbot.Bot{Updates: Updates, Bot: *bot}
+	game := gameplay.GameSettings{GuessQty: 10, MinNum: 1, MaxNum: 1000}
+	// a := &game.GuessQty
+	// *a--
+	// fmt.Println(game.GuessQty)
+
+	guessBot.Run(ctx, game)
 }
