@@ -9,14 +9,12 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type Bot struct {
+type GuessBot struct {
 	Updates tgbotapi.UpdatesChannel
 	Bot     tgbotapi.BotAPI
 }
 
-func (b *Bot) Run(ctx context.Context, game gameplay.GameSettings) {
-	guessQty := game.GuessQty
-
+func (b *GuessBot) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -24,57 +22,19 @@ func (b *Bot) Run(ctx context.Context, game gameplay.GameSettings) {
 		case update := <-b.Updates:
 			switch {
 			case update.Message != nil:
-				b.processMessage(&game.Target, &guessQty, game, update)
+				b.processMessage(update, &gameplay.StartingGameSettings)
 			case update.CallbackQuery != nil:
-				b.processCallbackQuery(&game.Target, &guessQty, game, update)
+				b.processCallbackQuery(update, &gameplay.StartingGameSettings)
 			}
 		}
 	}
 }
 
-func (b *Bot) processMessage(target *int, guessQty *int, game gameplay.GameSettings, update tgbotapi.Update) {
-	var response tgbotapi.Chattable = tgbotapi.NewMessage(update.Message.Chat.ID, "")
-
-	var responseKeyboard tgbotapi.Chattable = tgbotapi.NewMessage(update.Message.Chat.ID, "")
-
+func (b *GuessBot) processMessage(update tgbotapi.Update, game *gameplay.GameSettings) {
 	userMessage := update.Message.Text
-	userMessageAsInt, userMessageNotInt := game.ConvertUserMessageToInt(userMessage)
-	showResponseKeyboard := false
-
-	botGameplayAnswers := map[string]string{
-		"guessRange":     fmt.Sprintf("Я загадал число в диапазоне от %d до %d", game.MinNum, game.MaxNum),
-		"notInt":         "Введено не число. Повтори попытку",
-		"numberTooBig":   fmt.Sprintf("Твое число слишком БОЛЬШОЕ. Число оставшихся попыток: %d", *guessQty-1),
-		"numberTooSmall": fmt.Sprintf("Твое число слишком МАЛЕНЬКОЕ. Число оставшихся попыток: %d", *guessQty-1),
-		"playerWon":      "О, да! У тебя ПОЛУЧИЛОСЬ отгадать число!\nЧтобы сыграть еще жми /start",
-		"playerLost":     fmt.Sprintf("Извини, у тебя не получилось отгадать число. Ответ был %d.\nЧтобы сыграть еще жми /start", *target), //nolint:lll
-	}
-
-	switch {
-	case userMessage == "/start":
-		response = tgbotapi.NewMessage(update.Message.Chat.ID, botGameplayAnswers["guessRange"])
-		responseKeyboard = createStartKeyboard(update.Message.Chat.ID, game)
-		showResponseKeyboard = true
-
-	case userMessageNotInt:
-		response = tgbotapi.NewMessage(update.Message.Chat.ID, botGameplayAnswers["notInt"])
-	case userMessageAsInt > *target:
-		*guessQty--
-
-		response = tgbotapi.NewMessage(update.Message.Chat.ID, botGameplayAnswers["numberTooBig"])
-	case userMessageAsInt < *target:
-		*guessQty--
-
-		response = tgbotapi.NewMessage(update.Message.Chat.ID, botGameplayAnswers["numberTooSmall"])
-	case userMessageAsInt == *target:
-		response = tgbotapi.NewMessage(update.Message.Chat.ID, botGameplayAnswers["playerWon"])
-	}
-
-	if *guessQty == 0 {
-		response = tgbotapi.NewMessage(update.Message.Chat.ID, botGameplayAnswers["playerLost"])
-
-		*guessQty = game.GuessQty
-	}
+	botAnswer, showResponseKeyboard := game.HandleProcessMessage(userMessage)
+	response := tgbotapi.NewMessage(update.Message.Chat.ID, botAnswer)
+	responseKeyboard := createStartKeyboard(update.Message.Chat.ID, game.GuessTotal)
 
 	_, err := b.Bot.Send(response)
 	if err != nil {
@@ -101,24 +61,10 @@ func (b *Bot) processMessage(target *int, guessQty *int, game gameplay.GameSetti
 	}
 }
 
-func (b *Bot) processCallbackQuery(target *int, guessQty *int, game gameplay.GameSettings, update tgbotapi.Update) {
-	var response tgbotapi.Chattable = tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "")
-
+func (b *GuessBot) processCallbackQuery(update tgbotapi.Update, game *gameplay.GameSettings) {
 	callbackData := update.CallbackQuery.Data
-
-	botGameplayAnswers := map[string]string{
-		"start":     "Тогда погнали! Отправь мне число",
-		"rejection": "Если передумаешь, жми /start",
-	}
-
-	switch {
-	case callbackData == "yes":
-		*target = game.GenerateRandNumb()
-		*guessQty = game.GuessQty
-		response = tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, botGameplayAnswers["start"])
-	case callbackData == "no":
-		response = tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, botGameplayAnswers["rejection"])
-	}
+	botAswer := game.HandleProcessCallbackQuery(callbackData)
+	response := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, botAswer)
 
 	_, err := b.Bot.Send(response)
 	if err != nil {
@@ -132,18 +78,14 @@ func (b *Bot) processCallbackQuery(target *int, guessQty *int, game gameplay.Gam
 	}
 }
 
-func createStartKeyboard(chatID int64, game gameplay.GameSettings) tgbotapi.Chattable {
-	botGameplayAnswers := map[string]string{
-		"guessQty": fmt.Sprintf("Сможешь угадать это число с %d попыток?", game.GuessQty),
-	}
-
+func createStartKeyboard(chatID int64, guessTotal int) tgbotapi.Chattable {
 	btnY := tgbotapi.NewInlineKeyboardButtonData("Играем!", "yes")
 	btnN := tgbotapi.NewInlineKeyboardButtonData("В другой раз", "no")
 
 	row := tgbotapi.NewInlineKeyboardRow(btnY, btnN)
 	inlineKeyboard := tgbotapi.NewInlineKeyboardMarkup(row)
 
-	msg := tgbotapi.NewMessage(chatID, botGameplayAnswers["guessQty"])
+	msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("Сможешь угадать это число с %d попыток?", guessTotal))
 	msg.ReplyMarkup = inlineKeyboard
 
 	return msg
