@@ -10,8 +10,19 @@ import (
 )
 
 type GuessBot struct {
-	Updates tgbotapi.UpdatesChannel
-	Bot     tgbotapi.BotAPI
+	Updates  tgbotapi.UpdatesChannel
+	Bot      tgbotapi.BotAPI
+	Game     gameplay.Game
+	Settings gameplay.GameSettings
+}
+
+func NewBot(updates tgbotapi.UpdatesChannel, bot tgbotapi.BotAPI, game gameplay.Game, settings gameplay.GameSettings) *GuessBot { //nolint:lll
+	return &GuessBot{
+		Updates:  updates,
+		Bot:      bot,
+		Game:     game,
+		Settings: settings,
+	}
 }
 
 func (b *GuessBot) Run(ctx context.Context) {
@@ -22,19 +33,19 @@ func (b *GuessBot) Run(ctx context.Context) {
 		case update := <-b.Updates:
 			switch {
 			case update.Message != nil:
-				b.processMessage(update, &gameplay.StartingGameSettings)
+				b.processMessage(update, &b.Game.Target, &b.Game.GuessLeft, &b.Settings.GuessLimit)
 			case update.CallbackQuery != nil:
-				b.processCallbackQuery(update, &gameplay.StartingGameSettings)
+				b.processCallbackQuery(update, &b.Game.Target, &b.Game.GuessLeft, &b.Settings.GuessLimit)
 			}
 		}
 	}
 }
 
-func (b *GuessBot) processMessage(update tgbotapi.Update, game *gameplay.GameSettings) {
+func (b *GuessBot) processMessage(update tgbotapi.Update, target *int, guessLeft *int, guessLimit *int) {
 	userMessage := update.Message.Text
-	botAnswer, showResponseKeyboard := game.HandleProcessMessage(userMessage)
+	botAnswer, showResponseKeyboard := b.Settings.HandleProcessMessage(userMessage, target, guessLeft, guessLimit)
 	response := tgbotapi.NewMessage(update.Message.Chat.ID, botAnswer)
-	responseKeyboard := createStartKeyboard(update.Message.Chat.ID, game.GuessTotal)
+	responseKeyboard := createStartKeyboard(update.Message.Chat.ID, *guessLimit)
 
 	_, err := b.Bot.Send(response)
 	if err != nil {
@@ -61,9 +72,9 @@ func (b *GuessBot) processMessage(update tgbotapi.Update, game *gameplay.GameSet
 	}
 }
 
-func (b *GuessBot) processCallbackQuery(update tgbotapi.Update, game *gameplay.GameSettings) {
+func (b *GuessBot) processCallbackQuery(update tgbotapi.Update, target *int, guessLeft *int, guessLimit *int) {
 	callbackData := update.CallbackQuery.Data
-	botAswer := game.HandleProcessCallbackQuery(callbackData)
+	botAswer := b.Settings.HandleProcessCallbackQuery(callbackData, target, guessLeft, guessLimit)
 	response := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, botAswer)
 
 	_, err := b.Bot.Send(response)

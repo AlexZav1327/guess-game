@@ -9,24 +9,39 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+type Game struct {
+	GuessLeft int
+	Target    int
+}
+
 type GameSettings struct {
-	GuessTotal int
-	GuessLeft  int
-	Target     int
+	GuessLimit int
 	MinNum     int
 	MaxNum     int
 }
 
-var StartingGameSettings = GameSettings{GuessTotal: 10, GuessLeft: 10, MinNum: 1, MaxNum: 1000}
+func NewGame(guess int) *Game {
+	return &Game{
+		GuessLeft: guess,
+	}
+}
 
-func (g *GameSettings) HandleProcessMessage(userMessage string) (string, bool) {
+func NewGameSettings(limit int, min int, max int) *GameSettings {
+	return &GameSettings{
+		GuessLimit: limit,
+		MinNum:     min,
+		MaxNum:     max,
+	}
+}
+
+func (g *GameSettings) HandleProcessMessage(userMessage string, target *int, guessLeft *int, guessLimit *int) (string, bool) { //nolint:lll
 	botAnswerOptions := map[string]string{
 		"guessRange":     fmt.Sprintf("Я загадал число в диапазоне от %d до %d", g.MinNum, g.MaxNum),
 		"notInt":         "Введено не число. Повтори попытку",
-		"numberTooBig":   fmt.Sprintf("Твое число слишком БОЛЬШОЕ. Число оставшихся попыток: %d", g.GuessLeft-1),
-		"numberTooSmall": fmt.Sprintf("Твое число слишком МАЛЕНЬКОЕ. Число оставшихся попыток: %d", g.GuessLeft-1),
+		"numberTooBig":   fmt.Sprintf("Твое число слишком БОЛЬШОЕ. Число оставшихся попыток: %d", *guessLeft-1),
+		"numberTooSmall": fmt.Sprintf("Твое число слишком МАЛЕНЬКОЕ. Число оставшихся попыток: %d", *guessLeft-1),
 		"playerWon":      "О, да! У тебя ПОЛУЧИЛОСЬ отгадать число!\nЧтобы сыграть еще жми /start",
-		"playerLost":     fmt.Sprintf("Извини, у тебя не получилось отгадать число. Ответ был %d.\nЧтобы сыграть еще жми /start", g.Target), //nolint:lll
+		"playerLost":     fmt.Sprintf("Извини, у тебя не получилось отгадать число. Ответ был %d.\nЧтобы сыграть еще жми /start", *target), //nolint:lll
 	}
 
 	var botAnswer string
@@ -41,28 +56,28 @@ func (g *GameSettings) HandleProcessMessage(userMessage string) (string, bool) {
 
 	case userMessageNotInt:
 		botAnswer = botAnswerOptions["notInt"]
-	case userMessageAsInt > g.Target:
+	case userMessageAsInt > *target:
 		botAnswer = botAnswerOptions["numberTooBig"]
 
-		g.GuessLeft--
-	case userMessageAsInt < g.Target:
+		*guessLeft--
+	case userMessageAsInt < *target:
 		botAnswer = botAnswerOptions["numberTooSmall"]
 
-		g.GuessLeft--
-	case userMessageAsInt == g.Target:
+		*guessLeft--
+	case userMessageAsInt == *target:
 		botAnswer = botAnswerOptions["playerWon"]
 	}
 
-	if g.GuessLeft == 0 {
+	if *guessLeft == 0 {
 		botAnswer = botAnswerOptions["playerLost"]
 
-		g.GuessLeft = g.GuessTotal
+		*guessLeft = *guessLimit
 	}
 
 	return botAnswer, showResponseKeyboard
 }
 
-func (g *GameSettings) HandleProcessCallbackQuery(callbackData string) string {
+func (g *GameSettings) HandleProcessCallbackQuery(callbackData string, target *int, guessLeft *int, guessLimit *int) string { //nolint:lll
 	botAnswerOptions := map[string]string{
 		"start":     "Тогда погнали! Отправь мне число",
 		"rejection": "Если передумаешь, жми /start",
@@ -72,8 +87,8 @@ func (g *GameSettings) HandleProcessCallbackQuery(callbackData string) string {
 
 	switch {
 	case callbackData == "yes":
-		g.Target = g.generateRandNumb()
-		g.GuessLeft = g.GuessTotal
+		*target = g.generateRandNumb()
+		*guessLeft = *guessLimit
 
 		botAnswer = botAnswerOptions["start"]
 	case callbackData == "no":
