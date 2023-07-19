@@ -6,7 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/AlexZav1327/guess-game/internal/gameplay"
+	gameplay "github.com/AlexZav1327/guess-game/internal/gameplay"
 	tgbot "github.com/AlexZav1327/guess-game/internal/tg-bot"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	log "github.com/sirupsen/logrus"
@@ -21,7 +21,7 @@ func main() {
 			"package":  "main",
 			"function": "NewBotAPI",
 			"error":    err,
-		}).Warning("BotAPI instance creation error")
+		}).Panic("BotAPI instance creation error")
 
 		return
 	}
@@ -36,9 +36,8 @@ func main() {
 
 	defer cancel()
 
-	settings := gameplay.NewGameSettings(10, 1, 1000)
-	game := gameplay.NewGame(10)
-	guessBot := tgbot.NewBot(updates, *bot, *game, *settings)
+	game := gameplay.NewGame(10, gameplay.NewGameSettings(10, 1, 1000))
+	guessBot := tgbot.NewBot(updates, bot, game)
 
 	guessBot.Run(ctx)
 }

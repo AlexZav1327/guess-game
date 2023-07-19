@@ -2,7 +2,6 @@ package tgbot
 
 import (
 	"context"
-	"fmt"
 
 	gameplay "github.com/AlexZav1327/guess-game/internal/gameplay"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -10,18 +9,16 @@ import (
 )
 
 type GuessBot struct {
-	Updates  tgbotapi.UpdatesChannel
-	Bot      tgbotapi.BotAPI
-	Game     gameplay.Game
-	Settings gameplay.GameSettings
+	updates tgbotapi.UpdatesChannel
+	bot     tgbotapi.BotAPI
+	game    gameplay.Game
 }
 
-func NewBot(updates tgbotapi.UpdatesChannel, bot tgbotapi.BotAPI, game gameplay.Game, settings gameplay.GameSettings) *GuessBot { //nolint:lll
+func NewBot(updates tgbotapi.UpdatesChannel, bot *tgbotapi.BotAPI, game *gameplay.Game) *GuessBot {
 	return &GuessBot{
-		Updates:  updates,
-		Bot:      bot,
-		Game:     game,
-		Settings: settings,
+		updates: updates,
+		bot:     *bot,
+		game:    *game,
 	}
 }
 
@@ -30,24 +27,24 @@ func (b *GuessBot) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case update := <-b.Updates:
+		case update := <-b.updates:
 			switch {
 			case update.Message != nil:
-				b.processMessage(update, &b.Game.Target, &b.Game.GuessLeft, &b.Settings.GuessLimit)
+				b.processMessage(update)
 			case update.CallbackQuery != nil:
-				b.processCallbackQuery(update, &b.Game.Target, &b.Game.GuessLeft, &b.Settings.GuessLimit)
+				b.processCallbackQuery(update)
 			}
 		}
 	}
 }
 
-func (b *GuessBot) processMessage(update tgbotapi.Update, target *int, guessLeft *int, guessLimit *int) {
+func (b *GuessBot) processMessage(update tgbotapi.Update) {
 	userMessage := update.Message.Text
-	botAnswer, showResponseKeyboard := b.Settings.HandleProcessMessage(userMessage, target, guessLeft, guessLimit)
+	botAnswer, showResponseKeyboard := b.game.HandleProcessMessage(userMessage)
 	response := tgbotapi.NewMessage(update.Message.Chat.ID, botAnswer)
-	responseKeyboard := createStartKeyboard(update.Message.Chat.ID, *guessLimit)
+	responseKeyboard := b.createStartKeyboard(update.Message.Chat.ID)
 
-	_, err := b.Bot.Send(response)
+	_, err := b.bot.Send(response)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"package":  "tgbot",
@@ -59,7 +56,7 @@ func (b *GuessBot) processMessage(update tgbotapi.Update, target *int, guessLeft
 	}
 
 	if showResponseKeyboard {
-		_, err := b.Bot.Send(responseKeyboard)
+		_, err := b.bot.Send(responseKeyboard)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"package":  "tgbot",
@@ -72,12 +69,12 @@ func (b *GuessBot) processMessage(update tgbotapi.Update, target *int, guessLeft
 	}
 }
 
-func (b *GuessBot) processCallbackQuery(update tgbotapi.Update, target *int, guessLeft *int, guessLimit *int) {
+func (b *GuessBot) processCallbackQuery(update tgbotapi.Update) {
 	callbackData := update.CallbackQuery.Data
-	botAswer := b.Settings.HandleProcessCallbackQuery(callbackData, target, guessLeft, guessLimit)
+	botAswer := b.game.HandleProcessCallbackQuery(callbackData)
 	response := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, botAswer)
 
-	_, err := b.Bot.Send(response)
+	_, err := b.bot.Send(response)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"package":  "tgbot",
@@ -89,14 +86,15 @@ func (b *GuessBot) processCallbackQuery(update tgbotapi.Update, target *int, gue
 	}
 }
 
-func createStartKeyboard(chatID int64, guessTotal int) tgbotapi.Chattable {
+func (b *GuessBot) createStartKeyboard(chatID int64) tgbotapi.Chattable {
 	btnY := tgbotapi.NewInlineKeyboardButtonData("Играем!", "yes")
 	btnN := tgbotapi.NewInlineKeyboardButtonData("В другой раз", "no")
 
 	row := tgbotapi.NewInlineKeyboardRow(btnY, btnN)
 	inlineKeyboard := tgbotapi.NewInlineKeyboardMarkup(row)
 
-	msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("Сможешь угадать это число с %d попыток?", guessTotal))
+	msg := tgbotapi.NewMessage(chatID, "Сможешь угадать это число?")
+
 	msg.ReplyMarkup = inlineKeyboard
 
 	return msg

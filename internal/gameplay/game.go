@@ -9,39 +9,41 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type Game struct {
-	GuessLeft int
-	Target    int
-}
-
 type GameSettings struct {
-	GuessLimit int
-	MinNum     int
-	MaxNum     int
+	guessLimit int
+	minNum     int
+	maxNum     int
 }
 
-func NewGame(guess int) *Game {
+type Game struct {
+	guessLeft int
+	target    int
+	settings  *GameSettings
+}
+
+func NewGame(guess int, set *GameSettings) *Game {
 	return &Game{
-		GuessLeft: guess,
+		guessLeft: guess,
+		settings:  set,
 	}
 }
 
 func NewGameSettings(limit int, min int, max int) *GameSettings {
 	return &GameSettings{
-		GuessLimit: limit,
-		MinNum:     min,
-		MaxNum:     max,
+		guessLimit: limit,
+		minNum:     min,
+		maxNum:     max,
 	}
 }
 
-func (g *GameSettings) HandleProcessMessage(userMessage string, target *int, guessLeft *int, guessLimit *int) (string, bool) { //nolint:lll
+func (g *Game) HandleProcessMessage(userMessage string) (string, bool) {
 	botAnswerOptions := map[string]string{
-		"guessRange":     fmt.Sprintf("Я загадал число в диапазоне от %d до %d", g.MinNum, g.MaxNum),
+		"guessRange":     fmt.Sprintf("Я загадал число в диапазоне от %d до %d", g.settings.minNum, g.settings.maxNum),
 		"notInt":         "Введено не число. Повтори попытку",
-		"numberTooBig":   fmt.Sprintf("Твое число слишком БОЛЬШОЕ. Число оставшихся попыток: %d", *guessLeft-1),
-		"numberTooSmall": fmt.Sprintf("Твое число слишком МАЛЕНЬКОЕ. Число оставшихся попыток: %d", *guessLeft-1),
+		"numberTooBig":   fmt.Sprintf("Твое число слишком БОЛЬШОЕ. Число оставшихся попыток: %d", g.guessLeft-1),
+		"numberTooSmall": fmt.Sprintf("Твое число слишком МАЛЕНЬКОЕ. Число оставшихся попыток: %d", g.guessLeft-1),
 		"playerWon":      "О, да! У тебя ПОЛУЧИЛОСЬ отгадать число!\nЧтобы сыграть еще жми /start",
-		"playerLost":     fmt.Sprintf("Извини, у тебя не получилось отгадать число. Ответ был %d.\nЧтобы сыграть еще жми /start", *target), //nolint:lll
+		"playerLost":     fmt.Sprintf("Извини, у тебя не получилось отгадать число. Ответ был %d.\nЧтобы сыграть еще жми /start", g.target), //nolint:lll
 	}
 
 	var botAnswer string
@@ -56,30 +58,30 @@ func (g *GameSettings) HandleProcessMessage(userMessage string, target *int, gue
 
 	case userMessageNotInt:
 		botAnswer = botAnswerOptions["notInt"]
-	case userMessageAsInt > *target:
+	case userMessageAsInt > g.target:
 		botAnswer = botAnswerOptions["numberTooBig"]
 
-		*guessLeft--
-	case userMessageAsInt < *target:
+		g.guessLeft--
+	case userMessageAsInt < g.target:
 		botAnswer = botAnswerOptions["numberTooSmall"]
 
-		*guessLeft--
-	case userMessageAsInt == *target:
+		g.guessLeft--
+	case userMessageAsInt == g.target:
 		botAnswer = botAnswerOptions["playerWon"]
 	}
 
-	if *guessLeft == 0 {
+	if g.guessLeft == 0 {
 		botAnswer = botAnswerOptions["playerLost"]
 
-		*guessLeft = *guessLimit
+		g.guessLeft = g.settings.guessLimit
 	}
 
 	return botAnswer, showResponseKeyboard
 }
 
-func (g *GameSettings) HandleProcessCallbackQuery(callbackData string, target *int, guessLeft *int, guessLimit *int) string { //nolint:lll
+func (g *Game) HandleProcessCallbackQuery(callbackData string) string {
 	botAnswerOptions := map[string]string{
-		"start":     "Тогда погнали! Отправь мне число",
+		"start":     fmt.Sprintf("Тогда погнали! У тебя %d попыток. Отправь мне число", g.settings.guessLimit),
 		"rejection": "Если передумаешь, жми /start",
 	}
 
@@ -87,8 +89,8 @@ func (g *GameSettings) HandleProcessCallbackQuery(callbackData string, target *i
 
 	switch {
 	case callbackData == "yes":
-		*target = g.generateRandNumb()
-		*guessLeft = *guessLimit
+		g.target = g.generateRandNumb()
+		g.guessLeft = g.settings.guessLimit
 
 		botAnswer = botAnswerOptions["start"]
 	case callbackData == "no":
@@ -98,8 +100,8 @@ func (g *GameSettings) HandleProcessCallbackQuery(callbackData string, target *i
 	return botAnswer
 }
 
-func (g *GameSettings) generateRandNumb() int {
-	max := big.NewInt(int64(g.MaxNum))
+func (g *Game) generateRandNumb() int {
+	max := big.NewInt(int64(g.settings.maxNum))
 
 	randomNumber, err := rand.Int(rand.Reader, max)
 	if err != nil {
@@ -110,7 +112,7 @@ func (g *GameSettings) generateRandNumb() int {
 		}).Warning("Random number generation error")
 	}
 
-	result := randomNumber.Int64() + int64(g.MinNum)
+	result := randomNumber.Int64() + int64(g.settings.minNum)
 
 	return int(result)
 }
