@@ -1,5 +1,5 @@
 build:
-	go build cmd/game/main.go
+	go build -o bin/guess cmd/game/main.go
 
 fmt:
 	gofumpt -w .

@@ -21,6 +21,20 @@ type Game struct {
 	settings  *GameSettings
 }
 
+type DefaultConfiguration struct {
+	GuessLimit int
+	MinNum     int
+	MaxNum     int
+}
+
+func NewDefaultConfiguration() *DefaultConfiguration {
+	return &DefaultConfiguration{
+		GuessLimit: 10,
+		MinNum:     1,
+		MaxNum:     1000,
+	}
+}
+
 func NewGame(guess int, set *GameSettings) *Game {
 	return &Game{
 		guessLeft: guess,
@@ -49,14 +63,14 @@ func (g *Game) HandleProcessMessage(userMessage string) (string, bool) {
 	var botAnswer string
 
 	showResponseKeyboard := false
-	userMessageAsInt, userMessageNotInt := convertUserMessageToInt(userMessage)
+	userMessageAsInt, err := strconv.Atoi(userMessage)
 
 	switch {
 	case userMessage == "/start":
 		botAnswer = botAnswerOptions["guessRange"]
 		showResponseKeyboard = true
 
-	case userMessageNotInt:
+	case err != nil:
 		botAnswer = botAnswerOptions["notInt"]
 	case userMessageAsInt > g.target:
 		botAnswer = botAnswerOptions["numberTooBig"]
@@ -89,7 +103,7 @@ func (g *Game) HandleProcessCallbackQuery(callbackData string) string {
 
 	switch {
 	case callbackData == "yes":
-		g.target = g.generateRandNumb()
+		g.target = g.generateRandNum()
 		g.guessLeft = g.settings.guessLimit
 
 		botAnswer = botAnswerOptions["start"]
@@ -100,30 +114,19 @@ func (g *Game) HandleProcessCallbackQuery(callbackData string) string {
 	return botAnswer
 }
 
-func (g *Game) generateRandNumb() int {
+func (g *Game) generateRandNum() int {
 	max := big.NewInt(int64(g.settings.maxNum))
 
 	randomNumber, err := rand.Int(rand.Reader, max)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"package":  "gameplay",
-			"function": "generateRandNumb",
+			"function": "generateRandNum",
 			"error":    err,
-		}).Warning("Random number generation error")
+		}).Panic("Random number generation error")
 	}
 
 	result := randomNumber.Int64() + int64(g.settings.minNum)
 
 	return int(result)
-}
-
-func convertUserMessageToInt(message string) (int, bool) {
-	notNumber := false
-
-	result, err := strconv.Atoi(message)
-	if err != nil {
-		notNumber = true
-	}
-
-	return result, notNumber
 }

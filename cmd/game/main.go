@@ -26,7 +26,9 @@ func main() {
 		return
 	}
 
-	bot.Debug = true
+	debugMode := os.Getenv("DEBUG_MODE")
+
+	bot.Debug = debugMode == "true"
 
 	updateConfig := tgbotapi.NewUpdate(0)
 	updateConfig.Timeout = 60
@@ -36,7 +38,8 @@ func main() {
 
 	defer cancel()
 
-	game := gameplay.NewGame(10, gameplay.NewGameSettings(10, 1, 1000))
+	config := gameplay.NewDefaultConfiguration()
+	game := gameplay.NewGame(config.GuessLimit, gameplay.NewGameSettings(config.GuessLimit, config.MinNum, config.MaxNum))
 	guessBot := tgbot.NewBot(updates, bot, game)
 
 	guessBot.Run(ctx)
